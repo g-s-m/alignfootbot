@@ -31,8 +31,11 @@ func getConfig() *Config {
 func startGame(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("start game")
 	strTemplate := "Привет, собираемся на игру, деньги принимает %s"
-
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS footusers (USER_ID SERIAL PRIMARY KEY, TIMESTAMP TIMESTAMP DEFAULT CURRENT_TIMESTAMP, USERNAME TEXT, CHAT_ID INT, AMOUNT INT, MONEY REAL);`); err != nil {
+	
+	if _, err := db.Exec(`DROP TABLE IF EXISTS game`); err != nil {
+		log.Panic("Can't drop previous game")
+	}
+	if _, err := db.Exec(`CREATE TABLE game (USER_ID INT PRIMARY KEY, USERNAME TEXT, CHAT_ID INT, PLAYERS INT, MONEY REAL);`); err != nil {
         log.Panic("Can't create table: %s", err)
 	}
 
@@ -41,20 +44,76 @@ func startGame(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	bot.Send(responce)
 }
 
-func countPlayers(*sql.DB, *tgbotapi.BotAPI, *tgbotapi.Message) {
-	log.Println("count")
+func countPlayers(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
+	log.Println("count players")
+	data := fmt.Sprintf("SELECT (PLAYERS, MONEY, USERNAME) FROM game WHERE CHAT_ID = %d;", msg.Chat.ID)
+	rows, err := db.Query(data)
+	defer rows.Close()
+
+	if err != nil {
+		log.Printf("Error. Query error: %s", err)
+	}
+
+	for rows.Next() {
+		var (
+			result     string
+			userName   string
+			players    int64
+			money      float64
+		)
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Sscanf(result[0:len(result)-1], "(%d,%f,%s)", &players, &money, &userName)
+		log.Printf("(%s, %d, %f)\n", userName, players, money)
+	}
 }
 
-func addPlayer(*sql.DB, *tgbotapi.BotAPI, *tgbotapi.Message) {
+func addPlayer(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("add player")
+	players := 1
+	fmt.Sscanf(msg.Text, "+%d", &players)
+	data := `INSERT INTO game (USER_ID, USERNAME, CHAT_ID, PLAYERS, MONEY) VALUES($1, $2, $3, $4, $5) ON CONFLICT (USER_ID) DO UPDATE SET PLAYERS=game.PLAYERS+$4;`
+	result, err := db.Exec(data, msg.From.ID, msg.From.String(), msg.Chat.ID, players, 0)
+	if err != nil {
+		log.Printf("Error. Can't add player: %s", err)
+	}
+	ra, err := result.RowsAffected()
+	log.Printf("Updated(inserted) %d rows", ra)
 }
 
-func removePlayer(*sql.DB, *tgbotapi.BotAPI, *tgbotapi.Message) {
+func removePlayer(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("remove player")
+	players := 1
+	fmt.Sscanf(msg.Text, "-%d", &players)
+	data := `UPDATE game SET PLAYERS=game.PLAYERS-$1;`
+	result, err := db.Exec(data, players)
+	if err != nil {
+		log.Printf("Error. Can't remove player: %s", err)
+	}
+	ra, err := result.RowsAffected()
+	log.Printf("Updated(inserted) %d rows", ra)
+
+	data = `DELETE FROM game where PLAYERS <= 0;`
+	result, err = db.Exec(data)
+	if err != nil {
+		log.Printf("Error. Can't remove row: %s", err)
+	}
 }
 
-func addMoney(*sql.DB, *tgbotapi.BotAPI, *tgbotapi.Message) {
+func addMoney(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("add money")
+	var money float64
+	fmt.Sscanf(msg.Text, "$%f", &money)
+	log.Printf("Insert(update) money=%f", money)
+	data := `INSERT INTO game (USER_ID, USERNAME, CHAT_ID, PLAYERS, MONEY) VALUES($1, $2, $3, 1, $4) ON CONFLICT (USER_ID) DO UPDATE SET MONEY=$4;`
+	result, err := db.Exec(data, msg.From.ID, msg.From.String(), msg.Chat.ID, money)
+	if err != nil {
+		log.Printf("Error. Can't add player: %s", err)
+	}
+	ra, err := result.RowsAffected()
+	log.Printf("Updated(inserted) %d rows", ra)
+
 }
 
 func handleCommands(db *sql.DB, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
@@ -125,7 +184,7 @@ func CreateService(conf *Config) Service {
 	}
 	log.Printf("DB connection is established")
 
-	bot, err := tgbotapi.NewBotAPI(conf.BotToken)//"1270046039:AAERRjXQV4-o0um6vai_U7e0kJ4WiyQXTWQ")
+	bot, err := tgbotapi.NewBotAPI(conf.BotToken)
 	if err != nil {
 		db.Connection.Close()
 		log.Panic("Can't get API")
