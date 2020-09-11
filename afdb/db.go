@@ -32,12 +32,13 @@ func (th *Db) NewGame() {
 func (th *Db) ChatPlayers(chatId int64) []Player {
 	data := fmt.Sprintf("SELECT (PLAYERS, MONEY, USERNAME) FROM game WHERE CHAT_ID = %d;", chatId)
 	rows, err := th.Connection.Query(data)
-	defer rows.Close()
 
+	players := make([]Player, 0)
 	if err != nil {
 		log.Printf("Error. Query error: %s", err)
+		return players
 	}
-	players := make([]Player, 0)
+	defer rows.Close()
 	for rows.Next() {
 		var (
 			result     string
@@ -83,16 +84,16 @@ func (th* Db) DropPlayer(chatId int64, userId int64, players int) {
 }
 
 func (th* Db) PutMoney(chatId int64, userId int64, userName string, money float64) {
-	data := `INSERT INTO game (USER_ID, USERNAME, CHAT_ID, PLAYERS, MONEY) VALUES($1, $2, $3, 1, $4) ON CONFLICT (USER_ID) DO UPDATE SET MONEY=game.money+$4;`
-	_, err := th.Connection.Exec(data, userId, userName, chatId, money)
-	if err != nil {
-		log.Printf("Error. Can't add player: %s", err)
-	}
-
-	data = `INSERT INTO bank (chat_id, money, game_cost) VALUES($1, $2, 0.0) ON CONFLICT (chat_id) DO UPDATE SET MONEY=bank.money+$2;`
-	_, err = th.Connection.Exec(data, chatId, money)
+	data := `INSERT INTO bank (chat_id, money, game_cost) VALUES($1, $2, 0.0) ON CONFLICT (chat_id) DO UPDATE SET MONEY=bank.money+$2;`
+	_, err := th.Connection.Exec(data, chatId, money)
 	if err != nil {
 		log.Printf("Error. Can't money to the bank: %s", err)
+	}
+
+	data = `INSERT INTO game (USER_ID, USERNAME, CHAT_ID, PLAYERS, MONEY) VALUES($1, $2, $3, 1, $4) ON CONFLICT (USER_ID) DO UPDATE SET MONEY=game.money+$4;`
+	_, err = th.Connection.Exec(data, userId, userName, chatId, money)
+	if err != nil {
+		log.Printf("Error. Can't add player: %s", err)
 	}
 }
 
@@ -112,9 +113,9 @@ func (th* Db) SetGameCost(chatId int64, howMuch float64) {
 	}
 }
 
-func (th* Db) TakeMoney(chatId int64, howMuch float64) {
-	data := `update bank set money=bank.money-$1 where chat_id = $2;`
-	_, err := th.Connection.Exec(data, howMuch, chatId)
+func (th* Db) PayForTheGame(chatId int64) {
+	data := `update bank set money=(bank.money-(select (game_cost) from bank)) where chat_id=$1;`
+	_, err := th.Connection.Exec(data, chatId)
 	if err != nil {
 		log.Printf("Error. Can't take money from the bank: %s", err)
 	}
@@ -123,11 +124,12 @@ func (th* Db) TakeMoney(chatId int64, howMuch float64) {
 func (th* Db) HowMuchMoney(chatId int64) float64 {
 	data := fmt.Sprintf("select (money) from bank where chat_id=%d;", chatId)
 	rows, err := th.Connection.Query(data)
-	defer rows.Close()
 
 	if err != nil {
 		log.Printf("Error. Query error: %s", err)
+		return 0.0
 	}
+	defer rows.Close()
 	money := float64(0)
 	var result string
 	if rows.Next() {
@@ -135,7 +137,8 @@ func (th* Db) HowMuchMoney(chatId int64) float64 {
 			log.Fatal(err)
 		}
 	}
-	fmt.Sscanf(result, "(%f)", &money)
+
+	fmt.Sscanf(result, "%f", &money)
 	return money
 }
 

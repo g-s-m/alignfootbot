@@ -89,11 +89,17 @@ func setGameCost(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	db.SetGameCost(msg.Chat.ID, money)
 }
 
+func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
+	log.Println("finish game")
+	db.PayForTheGame(msg.Chat.ID)
+}
+
 func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	cmds := map[string]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message) {
-		"/go"    : startGame,
-		"/cost"  : setGameCost,
-		"/count" : countPlayers,
+		"/go"     : startGame,
+		"/cost"   : setGameCost,
+		"/count"  : countPlayers,
+		"/finish" : finishGame,
 	}
 	log.Printf("Receive message: %s", msg.Text)
 	tokens := strings.Fields(msg.Text)
