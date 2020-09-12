@@ -119,6 +119,9 @@ func (th* Db) PayForTheGame(chatId int64) {
 	if err != nil {
 		log.Printf("Error. Can't take money from the bank: %s", err)
 	}
+	if _, err := th.Connection.Exec(`DROP TABLE IF EXISTS game`); err != nil {
+		log.Panic("Can't drop previous game")
+	}
 }
 
 func (th* Db) HowMuchMoney(chatId int64) float64 {

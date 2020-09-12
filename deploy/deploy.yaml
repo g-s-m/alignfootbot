@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: footbot-deployment
+  labels:
+    app: footbot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: footbot
+  template:
+    metadata:
+      labels:
+        app: footbot
+    spec:
+      containers:
+      - name: alignfootbot
+        image: sgomenyuk/alignfootbot:0.2
+        resources:
+          limits:
+            cpu: "0.1"
+          requests:
+            cpu: "0.1"
+        env:
+        - name: DB_HOST
+          value: " 10.99.0.3" 
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "postgres"
+        - name: DB_NAME
+          value: "postgres"
+        - name: DB_PASSW
+          valueFrom: 
+            secretKeyRef:
+              name: footbotsecrets
+              key: dbpass
+        - name: DB_SSL_MODE
+          value: "disable"
+        - name: BOT_TOKEN
+          valueFrom: 
+            secretKeyRef:
+              name: footbotsecrets
+              key: bottoken
+

@@ -31,7 +31,8 @@ func getConfig() *Config {
 
 func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("start game")
-	strTemplate := "Привет, собираемся на игру, деньги принимает %s"
+	strTemplate := `Всем привет, собираемся играть, деньги принимает %s
+Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
 	
 	db.NewGame()
 	reply := fmt.Sprintf(strTemplate, msg.From.String())
@@ -65,6 +66,9 @@ func addPlayer(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	fmt.Sscanf(msg.Text, "+%d", &players)
 
 	db.NewPlayer(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), players)
+	text := fmt.Sprintf("записал")
+	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	bot.Send(reply)
 }
 
 func removePlayer(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
@@ -72,6 +76,9 @@ func removePlayer(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	players := 1
 	fmt.Sscanf(msg.Text, "-%d", &players)
 	db.DropPlayer(msg.Chat.ID, int64(msg.From.ID), players)
+	text := fmt.Sprintf("ну ладно, в следующий раз приходи")
+	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	bot.Send(reply)
 }
 
 func addMoney(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
@@ -79,6 +86,9 @@ func addMoney(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	var money float64
 	fmt.Sscanf(msg.Text, "$%f", &money)
 	db.PutMoney(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), money)
+	text := fmt.Sprintf("принял")
+	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	bot.Send(reply)
 }
 
 func setGameCost(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
@@ -87,11 +97,17 @@ func setGameCost(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Printf("Text: %s", msg.Text)
 	fmt.Sscanf(msg.CommandArguments(), "%f", &money)
 	db.SetGameCost(msg.Chat.ID, money)
+	text := fmt.Sprintf("запомнил")
+	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	bot.Send(reply)
 }
 
 func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("finish game")
 	db.PayForTheGame(msg.Chat.ID)
+	text := fmt.Sprintf("Спасибо за игру, в банке осталось %f", db.HowMuchMoney(msg.Chat.ID))
+	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	bot.Send(reply)
 }
 
 func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
