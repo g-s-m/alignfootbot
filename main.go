@@ -30,11 +30,17 @@ func getConfig() *Config {
 }
 
 func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
+	if db.GameExists(msg.Chat.ID) {
+		reply := "кто-то уже начал всех собирать"
+		responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
+		bot.Send(responce)
+		return
+	}
 	log.Println("start game")
 	strTemplate := `Всем привет, собираемся играть, деньги принимает %s
 Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
 	
-	db.NewGame()
+	db.NewGame(msg.Chat.ID)
 	reply := fmt.Sprintf(strTemplate, msg.From.String())
 	responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
 	bot.Send(responce)
@@ -42,6 +48,13 @@ func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 
 func countPlayers(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("count players")
+	if !db.GameExists(msg.Chat.ID) {
+		reply := fmt.Sprintf("Всего в банке: %f р.", db.HowMuchMoney(msg.Chat.ID))
+		responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
+		bot.Send(responce)
+		return
+	}
+
 	players := db.ChatPlayers(msg.Chat.ID)
     text := "Всего сдали: %f р.\nВсего в банке: %f р.\nОтметились %d человек:\n"
 	sum := float64(0)
@@ -65,9 +78,12 @@ func addPlayer(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	players := 1
 	fmt.Sscanf(msg.Text, "+%d", &players)
 
-	db.NewPlayer(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), players)
-	text := fmt.Sprintf("записал")
+	text := "записал"
+	if !db.NewPlayer(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), players) {
+		text = "пока никто не собирался играть, запишись попозже"
+	}
 	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	reply.BaseChat.ReplyToMessageID = msg.MessageID
 	bot.Send(reply)
 }
 
@@ -78,6 +94,7 @@ func removePlayer(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	db.DropPlayer(msg.Chat.ID, int64(msg.From.ID), players)
 	text := fmt.Sprintf("ну ладно, в следующий раз приходи")
 	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	reply.BaseChat.ReplyToMessageID = msg.MessageID
 	bot.Send(reply)
 }
 
@@ -85,9 +102,12 @@ func addMoney(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("add money")
 	var money float64
 	fmt.Sscanf(msg.Text, "$%f", &money)
-	db.PutMoney(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), money)
 	text := fmt.Sprintf("принял")
+	if !db.PutMoney(msg.Chat.ID, int64(msg.From.ID), msg.From.String(), money) {
+		text = "пока никто не собирался играть"
+	}
 	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	reply.BaseChat.ReplyToMessageID = msg.MessageID
 	bot.Send(reply)
 }
 
@@ -112,10 +132,14 @@ func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 
 func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	cmds := map[string]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message) {
-		"/go"     : startGame,
-		"/cost"   : setGameCost,
-		"/count"  : countPlayers,
-		"/finish" : finishGame,
+		"/go"                  : startGame,
+		"/cost"                : setGameCost,
+		"/count"               : countPlayers,
+		"/finish"              : finishGame,
+		"/go@alignfootbot"     : startGame,
+		"/cost@alignfootbot"   : setGameCost,
+		"/count@alignfootbot"  : countPlayers,
+		"/finish@alignfootbot" : finishGame,
 	}
 	log.Printf("Receive message: %s", msg.Text)
 	tokens := strings.Fields(msg.Text)
@@ -151,16 +175,14 @@ func (th *Service) Run() {
 		log.Panic("Can't get updates: %s", err)
 	}
 	th.db.CreateMoneyTable()
-	for {
-		select {
-		case update := <-updates:
-			if update.Message == nil {
-				continue
-			}
+	for update := range updates {
+		if update.Message == nil {
+			continue
+		}
+		log.Printf("Incoming message: %s", update.Message.Text)
 
-			if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
-				handleText(th.db, th.botApi, update.Message)
-			}
+		if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
+			handleText(th.db, th.botApi, update.Message)
 		}
 	}
 }
