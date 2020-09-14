@@ -73,15 +73,14 @@ func (th* Db) NewPlayer(chatId int64, userId int64, userName string, players int
 
 func (th* Db) DropPlayer(chatId int64, userId int64, players int) {
 	data := fmt.Sprintf(`UPDATE game_%d SET PLAYERS=game_%d.PLAYERS-$1 where USER_ID=$2;`, uint64(chatId), uint64(chatId))
-	result, err := th.Connection.Exec(data, players, userId)
+	_, err := th.Connection.Exec(data, players, userId)
 	if err != nil {
 		log.Printf("Error. Can't remove player: %s", err)
+		return
 	}
-	ra, err := result.RowsAffected()
-	log.Printf("Updated(inserted) %d rows", ra)
 
 	data = fmt.Sprintf(`DELETE FROM game_%d where PLAYERS <= 0 and USER_ID=$1;`, uint64(chatId))
-	result, err = th.Connection.Exec(data, userId)
+	_, err = th.Connection.Exec(data, userId)
 	if err != nil {
 		log.Printf("Error. Can't remove row: %s", err)
 	}
@@ -120,7 +119,7 @@ func (th* Db) SetGameCost(chatId int64, howMuch float64) {
 }
 
 func (th* Db) PayForTheGame(chatId int64) {
-	data := `update bank set money=(bank.money-(select (game_cost) from bank)) where chat_id=$1;`
+	data := `update bank set money=(bank.money-(select (game_cost) from bank where chat_id=$1)) where chat_id=$1;`
 	_, err := th.Connection.Exec(data, chatId)
 	if err != nil {
 		log.Printf("Error. Can't take money from the bank: %s", err)

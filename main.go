@@ -60,14 +60,13 @@ func countPlayers(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	sum := float64(0)
 	count := 0
 	for _, player := range players {
-		text += player.UserName
+		text += "@" + player.UserName
 		if player.Count > 1 {
-			text += " +" + strconv.Itoa(player.Count)
+			text += " +" + strconv.Itoa(player.Count - 1)
 		}
 		text += "\n"
 		sum += player.Money
 		count += player.Count
-		log.Printf("(%s, %d, %f)", player.UserName, player.Count, player.Money)
 	}
 	reply := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf(text, sum, db.HowMuchMoney(msg.Chat.ID), count))
 	bot.Send(reply)
@@ -124,8 +123,19 @@ func setGameCost(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 
 func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("finish game")
+	playersList := ""
+	players := db.ChatPlayers(msg.Chat.ID)
+	for _, player := range players {
+		playersList += "@" + player.UserName
+		if player.Count > 1 {
+			playersList += " +" + strconv.Itoa(player.Count - 1)
+		}
+		playersList += ", "
+	}
+
+
 	db.PayForTheGame(msg.Chat.ID)
-	text := fmt.Sprintf("Спасибо за игру, в банке осталось %f", db.HowMuchMoney(msg.Chat.ID))
+	text := fmt.Sprintf("%s cпасибо за игру, в банке осталось %f", playersList, db.HowMuchMoney(msg.Chat.ID))
 	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
 	bot.Send(reply)
 }
@@ -141,7 +151,6 @@ func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 		"/count@alignfootbot"  : countPlayers,
 		"/finish@alignfootbot" : finishGame,
 	}
-	log.Printf("Receive message: %s", msg.Text)
 	tokens := strings.Fields(msg.Text)
 	if cmd, ok := cmds[tokens[0]]; ok {
 		cmd(db, bot, msg)
@@ -179,8 +188,6 @@ func (th *Service) Run() {
 		if update.Message == nil {
 			continue
 		}
-		log.Printf("Incoming message: %s", update.Message.Text)
-
 		if reflect.TypeOf(update.Message.Text).Kind() == reflect.String && update.Message.Text != "" {
 			handleText(th.db, th.botApi, update.Message)
 		}
