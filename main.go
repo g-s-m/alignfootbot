@@ -1,14 +1,14 @@
 package main
 
 import (
-	"github.com/Syfaro/telegram-bot-api"
-	"fmt"
-	"log"
-	"strings"
-	"strconv"
-	"reflect"
-	"github.com/vrischmann/envconfig"
 	"alignfootbot/afdb"
+	"fmt"
+	"github.com/Syfaro/telegram-bot-api"
+	"github.com/vrischmann/envconfig"
+	"log"
+	"reflect"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -39,7 +39,7 @@ func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("start game")
 	strTemplate := `Всем привет, собираемся играть, деньги принимает @%s
 Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
-	
+
 	db.NewGame(msg.Chat.ID)
 	reply := fmt.Sprintf(strTemplate, msg.From.String())
 	responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
@@ -56,13 +56,13 @@ func countPlayers(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	}
 
 	players := db.ChatPlayers(msg.Chat.ID)
-    text := "Всего сдали: %f р.\nВсего в банке: %f р.\nОтметились %d человек:\n"
+	text := "Всего сдали: %f р.\nВсего в банке: %f р.\nОтметились %d человек:\n"
 	sum := float64(0)
 	count := 0
 	for _, player := range players {
 		text += "@" + player.UserName
 		if player.Count > 1 {
-			text += " +" + strconv.Itoa(player.Count - 1)
+			text += " +" + strconv.Itoa(player.Count-1)
 		}
 		text += "\n"
 		sum += player.Money
@@ -128,11 +128,10 @@ func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	for _, player := range players {
 		playersList += "@" + player.UserName
 		if player.Count > 1 {
-			playersList += " +" + strconv.Itoa(player.Count - 1)
+			playersList += " +" + strconv.Itoa(player.Count-1)
 		}
 		playersList += ", "
 	}
-
 
 	db.PayForTheGame(msg.Chat.ID)
 	text := fmt.Sprintf("%s cпасибо за игру, в банке осталось %f", playersList, db.HowMuchMoney(msg.Chat.ID))
@@ -141,15 +140,15 @@ func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 }
 
 func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
-	cmds := map[string]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message) {
-		"/go"                  : startGame,
-		"/cost"                : setGameCost,
-		"/count"               : countPlayers,
-		"/finish"              : finishGame,
-		"/go@alignfootbot"     : startGame,
-		"/cost@alignfootbot"   : setGameCost,
-		"/count@alignfootbot"  : countPlayers,
-		"/finish@alignfootbot" : finishGame,
+	cmds := map[string]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message){
+		"/go":                  startGame,
+		"/cost":                setGameCost,
+		"/count":               countPlayers,
+		"/finish":              finishGame,
+		"/go@alignfootbot":     startGame,
+		"/cost@alignfootbot":   setGameCost,
+		"/count@alignfootbot":  countPlayers,
+		"/finish@alignfootbot": finishGame,
 	}
 	tokens := strings.Fields(msg.Text)
 	if cmd, ok := cmds[tokens[0]]; ok {
@@ -158,11 +157,11 @@ func handleCommands(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 }
 
 func handleText(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) bool {
-	actions := map[byte]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message) {
-		'+' : addPlayer,
-		'-' : removePlayer,
-		'$' : addMoney,
-		'/' : handleCommands,
+	actions := map[byte]func(*afdb.Db, *tgbotapi.BotAPI, *tgbotapi.Message){
+		'+': addPlayer,
+		'-': removePlayer,
+		'$': addMoney,
+		'/': handleCommands,
 	}
 	if cmd, ok := actions[msg.Text[0]]; ok {
 		cmd(db, bot, msg)
@@ -210,9 +209,9 @@ func CreateService(conf *Config) Service {
 		db.Close()
 		log.Panic("Can't get API")
 	}
-	return Service {
-		db     : db,
-		botApi : bot,
+	return Service{
+		db:     db,
+		botApi: bot,
 	}
 }
 
