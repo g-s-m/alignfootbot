@@ -37,7 +37,7 @@ func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 		return
 	}
 	log.Println("start game")
-	strTemplate := `Всем привет, собираемся играть, деньги принимает %s
+	strTemplate := `Всем привет, собираемся играть, деньги принимает @%s
 Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
 	
 	db.NewGame(msg.Chat.ID)
