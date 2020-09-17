@@ -5,6 +5,7 @@ import (
 	_ "github.com/lib/pq"
 	"log"
 	"fmt"
+	"strings"
 )
 type Db struct {
 	Connection *sql.DB
@@ -16,17 +17,54 @@ type Player struct {
 	Money    float64
 }
 
+type Game struct {
+	Holder  string
+	Comment string
+}
+
 func (th *Db) Close() {
 	th.Connection.Close()
 }
 
-func (th *Db) NewGame(chatId int64) {
-	log.Printf("Creating table for chat %d", chatId)
-	if _, err := th.Connection.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS game_%d`, uint64(chatId))); err != nil {
+func (th *Db) NewGame(chatId int64, gameHolder string, comment string) {
+	log.Printf("Creating tables for chat %d, %s, %s", chatId, gameHolder, comment)
+	if _, err := th.Connection.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS game_%d;`, uint64(chatId))); err != nil {
 		log.Println("Can't drop previous game")
 	}
 	if _, err := th.Connection.Exec(fmt.Sprintf(`CREATE TABLE game_%d (USER_ID INT PRIMARY KEY, USERNAME TEXT, PLAYERS INT, MONEY REAL);`, uint64(chatId))); err != nil {
         log.Panic("Can't create table: %s", err)
+	}
+	if _, err := th.Connection.Exec(`insert into active_games (chat_id, game_holder, holder_message) 
+	                                 values ($1, $2, $3);`, chatId, gameHolder, comment); err != nil {
+		log.Println("Can't insert active game: %s", err)
+	}
+}
+
+func (th *Db) GameInfo(chatId int64) Game {
+	data := fmt.Sprintf("select (game_holder, holder_message) from active_games where chat_id = %d;", chatId)
+	rows, err := th.Connection.Query(data)
+	if err != nil {
+		log.Printf("Error. Query error: %s", err)
+		return Game{}
+	}
+	defer rows.Close()
+	var (
+		result   string
+		userName string
+		message  string
+	)
+	if rows.Next() {
+		if err := rows.Scan(&result); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf(result)
+		second := strings.Index(result, `,"`)
+		userName = strings.TrimPrefix(result[0:second], "(")
+		message = result[second + 2 : len(result) - 2]
+	}
+	return Game {
+		Holder  : userName,
+		Comment : message,
 	}
 }
 
@@ -102,11 +140,16 @@ func (th* Db) PutMoney(chatId int64, userId int64, userName string, money float6
 	return true
 }
 
-func (th* Db) CreateMoneyTable() {
+func (th* Db) Init() {
 	data := `create table if not exists bank (chat_id int primary key, money real, game_cost real);`
 	_, err := th.Connection.Exec(data)
 	if err != nil {
 		log.Printf("Error. Can't create bank table: %s", err)
+	}
+	data = `create table if not exists active_games (chat_id int primary key, game_holder text, holder_message text);`
+	_, err = th.Connection.Exec(data)
+	if err != nil {
+		log.Printf("Error. Can't create active_games table: %s", err)
 	}
 }
 
@@ -126,6 +169,10 @@ func (th* Db) PayForTheGame(chatId int64) {
 	}
 	if _, err := th.Connection.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS game_%d`, uint64(chatId))); err != nil {
 		log.Println("Can't drop previous game")
+	}
+	data = fmt.Sprintf("delete from active_games where chat_id = %d;", chatId)
+	if _, err := th.Connection.Exec(data); err != nil {
+		log.Printf("Error. Can't delete active game: %s", err)
 	}
 }
 

@@ -31,17 +31,17 @@ func getConfig() *Config {
 
 func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	if db.GameExists(msg.Chat.ID) {
-		reply := "кто-то уже начал всех собирать"
+		gameInfo := db.GameInfo(msg.Chat.ID)
+		reply := fmt.Sprintf("@%s уже начал всех собирать: %s", gameInfo.Holder, gameInfo.Comment)
 		responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
 		bot.Send(responce)
 		return
 	}
-	log.Println("start game")
-	strTemplate := `Всем привет, собираемся играть, деньги принимает @%s
+	strTemplate := `Всем привет, собираемся играть, деньги принимает @%s (%s)
 Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
-
-	db.NewGame(msg.Chat.ID)
-	reply := fmt.Sprintf(strTemplate, msg.From.String())
+	comment := strings.TrimPrefix(strings.TrimPrefix(msg.Text, "/go"), "@alignfootbot")
+	db.NewGame(msg.Chat.ID, msg.From.String(), comment)
+	reply := fmt.Sprintf(strTemplate, msg.From.String(), comment)
 	responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
 	bot.Send(responce)
 }
@@ -182,7 +182,7 @@ func (th *Service) Run() {
 	if err != nil {
 		log.Panic("Can't get updates: %s", err)
 	}
-	th.db.CreateMoneyTable()
+	th.db.Init()
 	for update := range updates {
 		if update.Message == nil {
 			continue
