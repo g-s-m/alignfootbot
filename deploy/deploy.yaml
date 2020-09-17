@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: alignfootbot
-        image: sgomenyuk/alignfootbot:0.9
+        image: sgomenyuk/alignfootbot:0.10
         resources:
           limits:
             cpu: "0.1"
