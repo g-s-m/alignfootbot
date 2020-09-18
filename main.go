@@ -123,6 +123,12 @@ func setGameCost(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 
 func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	log.Println("finish game")
+	if !db.GameExists(msg.Chat.ID) {
+		reply := "никто и не собирался"
+		responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
+		bot.Send(responce)
+		return
+	}
 	playersList := ""
 	players := db.ChatPlayers(msg.Chat.ID)
 	for _, player := range players {
