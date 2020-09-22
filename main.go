@@ -32,17 +32,19 @@ func getConfig() *Config {
 func startGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	if db.GameExists(msg.Chat.ID) {
 		gameInfo := db.GameInfo(msg.Chat.ID)
-		reply := fmt.Sprintf("@%s уже начал всех собирать: %s", gameInfo.Holder, gameInfo.Comment)
+		reply := fmt.Sprintf("[%s](tg://user?id=%d) уже начал всех собирать: %s", gameInfo.Holder, gameInfo.HolderId, gameInfo.Comment)
 		responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
+		responce.ParseMode = "Markdown"
 		bot.Send(responce)
 		return
 	}
-	strTemplate := `Всем привет, собираемся играть, деньги принимает @%s (%s)
+	strTemplate := `Всем привет, собираемся играть, деньги принимает [%s](tg://user?id=%d) (%s)
 Чтобы записаться ставьте "+", если сдали деньги ставьте $200 (значит сдали 200р). Если хотите привести друга, ставьте +2, если передумали, ставьте "-", но деньги не вернем.`
 	comment := strings.TrimPrefix(strings.TrimPrefix(msg.Text, "/go"), "@alignfootbot")
-	db.NewGame(msg.Chat.ID, msg.From.String(), comment)
-	reply := fmt.Sprintf(strTemplate, msg.From.String(), comment)
+	db.NewGame(msg.Chat.ID, msg.From.String(), int64(msg.From.ID), comment)
+	reply := fmt.Sprintf(strTemplate, msg.From.String(), msg.From.ID, comment)
 	responce := tgbotapi.NewMessage(msg.Chat.ID, reply)
+	responce.ParseMode = "Markdown"
 	bot.Send(responce)
 }
 
@@ -60,15 +62,16 @@ func countPlayers(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	sum := float64(0)
 	count := 0
 	for _, player := range players {
-		text += "@" + player.UserName
+		text += fmt.Sprintf("[%s](tg://user?id=%d)", player.UserName, player.UserId)
 		if player.Count > 1 {
 			text += " +" + strconv.Itoa(player.Count-1)
 		}
-		text += "\n"
+		text += fmt.Sprintf("(%fp.)\n", player.Money)
 		sum += player.Money
 		count += player.Count
 	}
 	reply := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf(text, sum, db.HowMuchMoney(msg.Chat.ID), count))
+	reply.ParseMode = "Markdown"
 	bot.Send(reply)
 }
 
@@ -132,9 +135,9 @@ func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	playersList := ""
 	players := db.ChatPlayers(msg.Chat.ID)
 	for _, player := range players {
-		playersList += "@" + player.UserName
+		playersList += fmt.Sprintf("[%s](tg://user?id=%d)", player.UserName, player.UserId)
 		if player.Count > 1 {
-			playersList += " +" + strconv.Itoa(player.Count-1)
+			playersList += " +" + strconv.Itoa(player.Count - 1)
 		}
 		playersList += ", "
 	}
@@ -142,6 +145,7 @@ func finishGame(db *afdb.Db, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	db.PayForTheGame(msg.Chat.ID)
 	text := fmt.Sprintf("%s cпасибо за игру, в банке осталось %f", playersList, db.HowMuchMoney(msg.Chat.ID))
 	reply := tgbotapi.NewMessage(msg.Chat.ID, text)
+	reply.ParseMode = "Markdown"
 	bot.Send(reply)
 }
 
